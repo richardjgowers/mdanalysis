@@ -21,6 +21,7 @@
 #
 from multiprocessing.sharedctypes import SynchronizedArray
 from multiprocessing import Process, Manager
+from sklearn.externals.joblib import cpu_count
 import numpy as np
 import sys
 import MDAnalysis as mda
@@ -178,9 +179,6 @@ class TriangularMatrix(object):
         self._elements *= scalar
         return self
 
-
-
-
     __rmul__ = __mul__
 
     def __str__(self):
@@ -195,7 +193,7 @@ class ParallelCalculation(object):
     Attributes
     ----------
 
-    ncores : int
+    n_jobs : int
             Number of cores to be used for parallel calculation
 
     function : callable object
@@ -216,13 +214,13 @@ class ParallelCalculation(object):
             len(kwargs).
     """
 
-    def __init__(self, ncores, function, args=None, kwargs=None):
+    def __init__(self, n_jobs, function, args=None, kwargs=None):
         """ Class constructor.
 
         Parameters
         ----------
 
-        ncores : int
+        n_jobs : int
             Number of cores to be used for parallel calculation
 
         function : object that supports __call__, as functions
@@ -238,7 +236,10 @@ class ParallelCalculation(object):
         """
 
         # args[i] should be a list of args, one for each run
-        self.ncores = ncores
+        self.n_jobs = n_jobs
+        if self.n_jobs == -1:
+            self.n_jobs = cpu_count()
+
         self.functions = function
         if not hasattr(self.functions, '__iter__'):
             self.functions = [self.functions]*len(args)
@@ -295,7 +296,7 @@ class ParallelCalculation(object):
                 is the return of function(\*args[3], \*\*kwargs[3]).
         """
         results_list = []
-        if self.ncores == 1:
+        if self.n_jobs == 1:
             for i in range(self.nruns):
                 results_list.append((i, self.functions[i](*self.args[i],
                                                           **self.kwargs[i])))
@@ -305,7 +306,7 @@ class ParallelCalculation(object):
             results = manager.Queue()
 
             workers = [Process(target=self.worker, args=(q, results)) for i in
-                       range(self.ncores)]
+                       range(self.n_jobs)]
 
             for i in range(self.nruns):
                 q.put(i)
